@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CheckCircle2, ChevronDown, ChevronUp, Circle, ReceiptText } from 'lucide-react';
 import { CategorySelector } from './CategorySelector';
@@ -36,11 +36,16 @@ export function DischargePage() {
   const flagLamaWaiver = useOpsStore((state) => state.flagLamaWaiver);
   const [dischargeType, setDischargeType] = useState<(typeof dischargeTypes)[number]['value']>('regular');
   const [billType, setBillType] = useState<(typeof billTypes)[number]['value']>('provisional');
-  const [expandedPatient, setExpandedPatient] = useState<string | null>('P009');
+  const [expandedPatient, setExpandedPatient] = useState<string | null>(null);
   const inpatientPatients = patients.filter((patient) =>
     beds.some((bed) => bed.patientId === patient.id) && patient.status !== 'discharged'
       && patient.dischargeType === dischargeType && patient.billType === billType,
   );
+  useEffect(() => {
+    if (!inpatientPatients.some((patient) => patient.id === expandedPatient)) {
+      setExpandedPatient(inpatientPatients[0]?.id ?? null);
+    }
+  }, [expandedPatient, inpatientPatients]);
   const settleAndRelease = (patient: Patient, bedId: string) => {
     patient.itemizedBill.filter((item) => !item.cleared).forEach((item) => clearPatientBillingItem(patient.id, item.description));
     completeDischargeStage(patient.id, 'payment_cleared');

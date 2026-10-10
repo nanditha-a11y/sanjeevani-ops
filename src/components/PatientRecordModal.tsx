@@ -96,7 +96,7 @@ export function PatientRecordModal() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">Comprehensive administrative record</p>
                 <h2 id="patient-record-title" className="mt-1 text-2xl font-bold text-slate-900">{patient.name}</h2>
-                <p className="mt-1 text-sm text-slate-600">{patient.id} · {patient.age} years · {patient.gender ?? 'Gender not recorded'} · {bed ? `${bed.ward} / ${bed.bedNumber}` : patient.department}</p>
+                <p className="mt-1 text-sm text-slate-600">{patient.id} · {patient.age ? `${patient.age} years` : patient.ageGroup ? `Age ${patient.ageGroup}` : 'Age not recorded'} · {patient.gender ?? 'Gender not recorded'} · {bed ? `${bed.ward} / ${bed.bedNumber}` : patient.department}</p>
                 {bed && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="text-xs text-slate-500">Attending physician:</span>

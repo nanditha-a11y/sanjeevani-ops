@@ -89,7 +89,13 @@ export function CommandCenter({ onNavigate }: { onNavigate: (page: AppPage, focu
 
   const sortedAlerts = sortAndFilterAlerts(alerts, alertFilter, alertSort);
   const criticalAlerts = sortedAlerts.filter((alert) => alert.urgency === 'high');
-  const blockerPending = labTests.some((test) => test.id === 'L882' && test.status !== 'completed');
+  const pendingBlocker = [...labTests]
+    .filter((test) => test.isDischargeBlocker && test.status !== 'completed')
+    .sort((first, second) => second.requestedTimeMinutesAgo - first.requestedTimeMinutesAgo)[0];
+  const blockerBed = pendingBlocker
+    ? beds.find((bed) => bed.blockedByTaskId === pendingBlocker.id)
+    : undefined;
+  const blockerPending = Boolean(pendingBlocker);
   const activePatients = patients.filter((patient) => patient.status !== 'discharged').length;
   const availableBeds = beds.filter((bed) => bed.occupancyStatus === 'available').length;
   const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -127,11 +133,11 @@ export function CommandCenter({ onNavigate }: { onNavigate: (page: AppPage, focu
           <span className="rounded-xl bg-teal-50 p-2.5 text-teal-700"><Sparkles aria-hidden="true" className="h-5 w-5" /></span>
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">AI Executive Briefing</p>
-            <h2 className="mt-1 text-lg font-bold text-slate-900">Operational bottleneck: Ward B discharge throughput</h2>
+            <h2 className="mt-1 text-lg font-bold text-slate-900">{blockerPending ? `Operational bottleneck: ${blockerBed?.ward ?? 'discharge'} throughput` : 'Operational status: discharge diagnostics'}</h2>
             <p className="mt-2 max-w-4xl text-sm leading-relaxed text-slate-600">
               {blockerPending
-                ? 'A pending diagnostic is holding Bed B12 at 95% discharge readiness. Expedite the lab result to restore capacity and reduce Emergency Department intake pressure.'
-                : 'Lab #882 has cleared. Continue monitoring remaining ward capacity and time-sensitive claims from their dedicated operational pages.'}
+                ? `Pending ${pendingBlocker?.testName} for ${pendingBlocker?.patientName} is holding ${blockerBed?.bedNumber ?? 'a bed'} at ${blockerBed?.dischargeReadiness ?? 0}% discharge readiness. Review the linked diagnostic and discharge tasks to restore capacity.`
+                : 'No discharge-blocking diagnostics are currently pending. Continue monitoring ward capacity and time-sensitive claims from their dedicated operational pages.'}
             </p>
           </div>
         </div>
@@ -185,7 +191,7 @@ export function CommandCenter({ onNavigate }: { onNavigate: (page: AppPage, focu
         <div className="space-y-2">
           {feedbackAlerts.map((feedback) => (
             <article key={feedback.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-100 bg-white p-3">
-              <button type="button" onClick={() => openPatientRecord(feedback.patientId)} className="min-w-0 flex-1 text-left">
+              <button type="button" onClick={() => { if (feedback.patientId) openPatientRecord(feedback.patientId); }} className="min-w-0 flex-1 text-left">
                 <span className={`rounded-full px-2 py-1 text-[10px] font-bold uppercase ${feedback.severity === 'high' ? 'bg-rose-100 text-rose-800' : feedback.severity === 'medium' ? 'bg-amber-100 text-amber-900' : 'bg-slate-100 text-slate-700'}`}>{feedback.severity}</span>
                 <span className="ml-2 text-sm font-semibold text-slate-900">{feedback.patientName} · {feedback.category}</span>
                 <p className="mt-1 line-clamp-2 text-xs text-slate-600">{feedback.issueDescription}</p>

@@ -57,13 +57,17 @@ export function WardsPage({ focus, wardTarget }: { focus?: 'vacant-beds' | 'hdu'
   const availableBeds = beds.filter((bed) => bed.occupancyStatus === 'available');
   const currentPhysicianWorkloads = physicianWorkloads.map((doctor) => {
     const assignedBeds = beds.filter((bed) => bed.attendingPhysician === doctor.doctorName && bed.occupancyStatus !== 'available');
-    const activePatientsCount = assignedBeds.length;
-    const blockedPatientsCount = assignedBeds.filter((bed) => Boolean(bed.blockedByTaskId) || bed.dischargeReadiness >= 80).length;
+    const activePatientsCount = assignedBeds.length || doctor.activePatientsCount;
+    const blockedPatientsCount = assignedBeds.length
+      ? assignedBeds.filter((bed) => Boolean(bed.blockedByTaskId) || bed.dischargeReadiness >= 80).length
+      : doctor.blockedPatientsCount;
     return {
       ...doctor,
       activePatientsCount,
       blockedPatientsCount,
-      capacityStatus: activePatientsCount >= 4 ? 'overloaded' as const : activePatientsCount === 0 ? 'available' as const : 'balanced' as const,
+      capacityStatus: assignedBeds.length
+        ? activePatientsCount >= 4 ? 'overloaded' as const : activePatientsCount === 0 ? 'available' as const : 'balanced' as const
+        : doctor.capacityStatus,
     };
   });
 
@@ -71,7 +75,7 @@ export function WardsPage({ focus, wardTarget }: { focus?: 'vacant-beds' | 'hdu'
     if (wardTarget) {
       setSelectedWardId(wards.find((ward) => ward.name.toLowerCase() === wardTarget.wardName.toLowerCase())?.id ?? null);
     } else if (focus === 'hdu') {
-      setSelectedWardId(wards.find((ward) => ward.name.toLowerCase().includes('step-down'))?.id ?? null);
+      setSelectedWardId(wards.find((ward) => /step[- ]?down|hdu|icu/i.test(ward.name))?.id ?? wards[0]?.id ?? null);
     } else if (showVacantBeds) {
       window.setTimeout(() => document.getElementById('vacant-beds-view')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     }
@@ -173,7 +177,7 @@ export function WardsPage({ focus, wardTarget }: { focus?: 'vacant-beds' | 'hdu'
                 <article key={ward.id} className="glass-panel p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Floor {ward.floor}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-teal-700">Floor {ward.floor ?? 'not listed'}</p>
                       <h2 className="mt-1 text-xl font-bold text-slate-900">{ward.name}</h2>
                     </div>
                     <span className={`rounded-full border px-3 py-1 text-center text-[11px] font-bold ${status.style}`}>{status.text}</span>
@@ -199,7 +203,7 @@ export function WardsPage({ focus, wardTarget }: { focus?: 'vacant-beds' | 'hdu'
               <div className="flex items-center gap-2 text-sm">
                 <button type="button" onClick={() => setSelectedWardId(null)} className="font-semibold text-teal-800 hover:text-teal-900">Common Wards</button>
                 <span className="text-slate-400">➔</span>
-                <span className="font-bold text-slate-900">{selectedWard.name} (Floor {selectedWard.floor})</span>
+                <span className="font-bold text-slate-900">{selectedWard.name} (Floor {selectedWard.floor ?? 'not listed'})</span>
               </div>
               <button type="button" onClick={() => setPatientModalOpen(true)} className="rounded-lg bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-teal-700">
                 <Plus aria-hidden="true" className="mr-1.5 inline h-4 w-4" /> Add Patient to Ward
@@ -281,7 +285,7 @@ export function WardsPage({ focus, wardTarget }: { focus?: 'vacant-beds' | 'hdu'
         {patientModalOpen && selectedWard && (
           <motion.div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-4 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onMouseDown={(event) => { if (event.target === event.currentTarget) setPatientModalOpen(false); }}>
             <motion.form onSubmit={savePatient} className="glass-panel w-full max-w-xl space-y-4 bg-white p-6" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}>
-              <div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-teal-700">{selectedWard.name} · Floor {selectedWard.floor}</p><h2 className="text-xl font-bold text-slate-900">Add Patient to Ward</h2></div><button type="button" onClick={() => setPatientModalOpen(false)} aria-label="Close" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><ArrowLeft aria-hidden="true" className="h-4 w-4" /></button></div>
+              <div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-teal-700">{selectedWard.name} · Floor {selectedWard.floor ?? 'not listed'}</p><h2 className="text-xl font-bold text-slate-900">Add Patient to Ward</h2></div><button type="button" onClick={() => setPatientModalOpen(false)} aria-label="Close" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><ArrowLeft aria-hidden="true" className="h-4 w-4" /></button></div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="text-sm font-medium text-slate-700">Patient ID<input required value={patientForm.id} onChange={(event) => setPatientForm({ ...patientForm, id: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label>
                 <label className="text-sm font-medium text-slate-700">Full Name<input required value={patientForm.name} onChange={(event) => setPatientForm({ ...patientForm, name: event.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2" /></label>

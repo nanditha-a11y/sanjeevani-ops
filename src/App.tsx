@@ -31,8 +31,13 @@ export function App() {
   const [wardTarget, setWardTarget] = useState<{ wardName: string; patientId: string } | undefined>();
   const currentUser = useOpsStore((state) => state.currentUser);
   const isAuthenticated = useOpsStore((state) => state.isAuthenticated);
+  const loadCsvData = useOpsStore((state) => state.loadCsvData);
   const logout = useOpsStore((state) => state.logout);
   const openPatientRecord = useOpsStore((state) => state.openPatientRecord);
+
+  useEffect(() => {
+    void loadCsvData();
+  }, [loadCsvData]);
 
   const navigate = (page: AppPage, focus?: 'vacant-beds' | 'hdu' | 'lab-fast-track') => {
     setCurrentPage(page);

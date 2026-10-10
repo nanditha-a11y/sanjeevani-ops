@@ -5,31 +5,33 @@ import { PatientLink } from './PatientLink';
 
 export function LabQueue() {
   const labTests = useOpsStore((state) => state.labTests);
+  const beds = useOpsStore((state) => state.beds);
   const completeLabTest = useOpsStore((state) => state.completeLabTest);
   const priorityTests = labTests
     .filter((test) => test.isDischargeBlocker && test.status !== 'completed')
-    .sort((first, second) => Number(second.id === 'L882') - Number(first.id === 'L882'));
+    .sort((first, second) => second.requestedTimeMinutesAgo - first.requestedTimeMinutesAgo);
   const otherTests = labTests.filter((test) => !test.isDischargeBlocker || test.status === 'completed');
 
   const renderTest = (test: (typeof labTests)[number]) => {
-    const isHoldingWardB = test.id === 'L882' && test.status !== 'completed';
+    const isHoldingDischarge = test.isDischargeBlocker && test.status !== 'completed';
+    const linkedBed = beds.find((bed) => bed.blockedByTaskId === test.id);
     return (
-      <article key={test.id} className={`rounded-xl border bg-white p-4 ${isHoldingWardB ? 'border-rose-200' : 'border-slate-200'}`}>
+      <article key={test.id} className={`rounded-xl border bg-white p-4 ${isHoldingDischarge ? 'border-rose-200' : 'border-slate-200'}`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
-            <span className={`rounded-lg p-2 ${isHoldingWardB ? 'bg-rose-50 text-rose-700' : 'bg-teal-50 text-teal-700'}`}>
+            <span className={`rounded-lg p-2 ${isHoldingDischarge ? 'bg-rose-50 text-rose-700' : 'bg-teal-50 text-teal-700'}`}>
               <FlaskConical aria-hidden="true" className="h-5 w-5" />
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-semibold text-slate-900">Lab Test #{test.id.slice(1)}</h3>
-                {isHoldingWardB && (
+                {isHoldingDischarge && (
                   <motion.span
                     className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700"
                     animate={{ opacity: [1, 0.55, 1] }}
                     transition={{ duration: 1.6, repeat: Infinity }}
                   >
-                    Holding Ward B Discharge
+                    Holding {linkedBed?.ward ?? 'Ward'} Discharge
                   </motion.span>
                 )}
               </div>

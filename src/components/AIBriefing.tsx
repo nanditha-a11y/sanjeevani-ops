@@ -9,7 +9,9 @@ function countBlockedDischarges(beds: Bed[], labTests: LabTest[]) {
 }
 
 function findPrimaryBlocker(labTests: LabTest[]) {
-  return labTests.find((t) => t.isDischargeBlocker && t.status !== 'completed');
+  return [...labTests]
+    .filter((test) => test.isDischargeBlocker && test.status !== 'completed')
+    .sort((first, second) => second.requestedTimeMinutesAgo - first.requestedTimeMinutesAgo)[0];
 }
 
 export function AIBriefing() {
@@ -18,6 +20,7 @@ export function AIBriefing() {
   const labTests = useOpsStore((s) => s.labTests);
   const blockedCount = countBlockedDischarges(beds, labTests);
   const blocker = findPrimaryBlocker(labTests);
+  const blockerBed = blocker ? beds.find((bed) => bed.blockedByTaskId === blocker.id) : undefined;
 
   return (
     <motion.div
@@ -54,11 +57,11 @@ export function AIBriefing() {
                 {' '}
                 Primary Bottleneck:{' '}
                 <span className="text-[#F59E0B] font-semibold">
-                  {blockedCount} blocked discharge-blocks in Ward B
+                  {blockedCount} discharge-blocking beds in {blockerBed?.ward ?? 'the monitored wards'}
                 </span>{' '}
                 are threatening Emergency Intake over the next 2 hours. Root Cause:{' '}
                 <span className="text-[#EF4444] font-semibold">
-                  Overdue Lab Report #{blocker?.id} holding Bed B12 clearance.
+                  {blocker ? `${blocker.testName} ${blocker.id} is holding ${blockerBed?.bedNumber ?? 'bed'} clearance.` : 'No diagnostic blocker is active.'}
                 </span>
               </>
             ) : (

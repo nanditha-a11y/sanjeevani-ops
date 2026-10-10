@@ -2,6 +2,11 @@ export interface Patient {
   id: string;
   name: string;
   age: number;
+  ageGroup?: string;
+  admissionId?: string;
+  admissionTime?: string;
+  expectedDischarge?: string;
+  triagePriority?: 'P1' | 'P2';
   department: string;
   visitType: string;
   status: 'arrived' | 'triage' | 'waiting' | 'consulting' | 'discharged' | 'admitted';
@@ -46,7 +51,7 @@ export type WardType = 'general' | 'surgical' | 'pediatric' | 'stepdown' | 'dayc
 export interface Ward {
   id: string;
   name: string;
-  floor: number;
+  floor: number | null;
   totalRooms: number;
   emergencyCapacityThreshold: number;
 }
@@ -77,12 +82,24 @@ export interface AuthUser {
   department?: string;
 }
 
+export type PatientFeedbackCategory =
+  | 'Lab Delay'
+  | 'ED Wait Time'
+  | 'Billing Clearance'
+  | 'Staff Attentiveness'
+  | 'Billing'
+  | 'Cleanliness'
+  | 'Discharge delay'
+  | 'Food'
+  | 'Staff behaviour'
+  | 'Waiting time';
+
 export interface PatientFeedback {
   id: string;
   patientName: string;
-  patientId: string;
+  patientId?: string;
   department: string;
-  category: 'Lab Delay' | 'ED Wait Time' | 'Billing Clearance' | 'Staff Attentiveness';
+  category: PatientFeedbackCategory;
   issueDescription: string;
   severity: 'high' | 'medium' | 'low';
   status: 'open' | 'investigating' | 'resolved';
@@ -96,9 +113,10 @@ export interface PhysicianWorkload {
   activePatientsCount: number;
   blockedPatientsCount: number;
   capacityStatus: 'overloaded' | 'balanced' | 'available';
+  availability?: DepartmentDoctorStatus;
 }
 
-export type DepartmentDoctorStatus = 'On Duty' | 'In OPD' | 'On Call';
+export type DepartmentDoctorStatus = 'On Duty' | 'In OPD' | 'On Call' | 'On Leave';
 export type DepartmentTriagePriority = 'high' | 'moderate' | 'low';
 
 export interface DepartmentDoctor {
@@ -193,6 +211,129 @@ export interface DonorAppointment {
   checkedIn: boolean;
 }
 
+export interface HospitalAppointment {
+  id: string;
+  doctor: string;
+  department: string;
+  dateTime: string;
+  status: 'Cancelled' | 'Completed' | 'No-show' | 'Open slot' | 'Scheduled' | 'Waiting';
+  waitingTimeMinutes: number | null;
+}
+
+export interface EDWaitTime {
+  date: string;
+  hour: string;
+  averageWaitMinutes: number | null;
+}
+
+export interface DischargeRequest {
+  id: string;
+  patientId: string;
+  ward: string;
+  bedId: string;
+  requestedTime: string;
+  pendingTasks: string;
+  medicationStatus: string;
+  documentStatus: string;
+}
+
+export interface CsvPatientRecord {
+  patient_id: string;
+  age_group: string;
+  department: string;
+  visit_type: string;
+  status: string;
+}
+
+export interface CsvBedRecord {
+  bed_id: string;
+  ward: string;
+  bed_type: string;
+  occupancy: string;
+  patient_id: string;
+  admission_discharge_status: string;
+}
+
+export interface CsvAdmissionRecord {
+  admission_id: string;
+  patient_id: string;
+  admission_time: string;
+  department: string;
+  ward: string;
+  expected_discharge: string;
+  status: string;
+  triage_priority: string;
+}
+
+export interface CsvDiagnosticRecord {
+  test_id: string;
+  test: string;
+  patient_id: string;
+  department: string;
+  status: string;
+  requested_time: string;
+  expected_completion: string;
+}
+
+export interface CsvDischargeRecord {
+  request_id: string;
+  patient_id: string;
+  ward: string;
+  bed_id: string;
+  requested_time: string;
+  pending_tasks: string;
+  medication_status: string;
+  document_status: string;
+}
+
+export interface CsvStaffRecord {
+  staff_id: string;
+  name: string;
+  role: string;
+  department: string;
+  date: string;
+  shift: string;
+  availability: string;
+  patients_assigned: string;
+}
+
+export interface CsvFeedbackRecord {
+  feedback_id: string;
+  date: string;
+  department: string;
+  category: string;
+  severity: string;
+  resolution_status: string;
+  comment: string;
+}
+
+export interface CsvAppointmentRecord {
+  appointment_id: string;
+  doctor: string;
+  department: string;
+  datetime: string;
+  status: string;
+  waiting_time_min: string;
+}
+
+export interface CsvEDWaitTimeRecord {
+  date: string;
+  hour: string;
+  ed_avg_wait_min: string;
+}
+
+export interface HospitalCsvSource {
+  patients: CsvPatientRecord[];
+  beds: CsvBedRecord[];
+  admissions: CsvAdmissionRecord[];
+  diagnostics: CsvDiagnosticRecord[];
+  discharge: CsvDischargeRecord[];
+  staff: CsvStaffRecord[];
+  feedback: CsvFeedbackRecord[];
+  appointments: CsvAppointmentRecord[];
+  edWaitTimes: CsvEDWaitTimeRecord[];
+}
+
 export interface InsuranceClaim {
   claimId: string;
   patientName: string;
@@ -238,4 +379,20 @@ export interface OperationalAlert {
   blastRadiusSummary: string;
   autoPilotSecondsLeft: number;
   createdAt: string;
+  linkedLabTestIds?: string[];
+  linkedBedIds?: string[];
+}
+
+export interface HospitalCsvDataset {
+  patients: Patient[];
+  beds: Bed[];
+  wards: Ward[];
+  labTests: LabTest[];
+  patientFeedback: PatientFeedback[];
+  physicianWorkloads: PhysicianWorkload[];
+  departments: Department[];
+  appointments: HospitalAppointment[];
+  edWaitTimes: EDWaitTime[];
+  dischargeRequests: DischargeRequest[];
+  alerts: OperationalAlert[];
 }

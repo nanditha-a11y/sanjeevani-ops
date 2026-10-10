@@ -214,7 +214,7 @@ export function IsolationPage() {
                                 patientName={`${patient?.name ?? room.patientName} (${room.patientId})`}
                                 className="text-base"
                               />
-                              {patient && <span className="ml-1 text-sm font-medium text-slate-600">· Age {patient.age}</span>}
+                              {patient && <span className="ml-1 text-sm font-medium text-slate-600">· Age {patient.age || patient.ageGroup || 'not recorded'}</span>}
                             </p>
                           ) : (
                             <p className="text-base font-semibold text-slate-900">{room.patientName}</p>
@@ -393,7 +393,7 @@ export function IsolationPage() {
                       className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5"
                     >
                       {assignablePatients.map((patient) => (
-                        <option key={patient.id} value={patient.id}>{patient.name} ({patient.id}) · Age {patient.age}</option>
+                        <option key={patient.id} value={patient.id}>{patient.name} ({patient.id}) · Age {patient.age || patient.ageGroup || 'not recorded'}</option>
                       ))}
                     </select>
                   </label>

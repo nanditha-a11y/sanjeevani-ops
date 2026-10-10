@@ -17,7 +17,11 @@ import type {
   PatientFeedback,
   PhysicianWorkload,
   Department,
+  DischargeRequest,
+  EDWaitTime,
+  HospitalAppointment,
 } from '../types';
+import { loadHospitalCsvDataset } from '../data/csvData';
 import {
   mockBloodInventory,
   mockCampaigns,
@@ -38,6 +42,12 @@ import {
 type TimeOffset = 'NOW' | '+1h' | '+2h' | '+4h';
 
 interface OpsStore {
+  isLoading: boolean;
+  dataLoadError: string | null;
+  appointments: HospitalAppointment[];
+  edWaitTimes: EDWaitTime[];
+  dischargeRequests: DischargeRequest[];
+  loadCsvData: () => Promise<void>;
   hospitalHealthScore: number;
   activeTimeOffset: TimeOffset;
   alerts: OperationalAlert[];
@@ -112,6 +122,37 @@ interface OpsStore {
 }
 
 export const useOpsStore = create<OpsStore>((set, get) => ({
+  isLoading: false,
+  dataLoadError: null,
+  appointments: [],
+  edWaitTimes: [],
+  dischargeRequests: [],
+  loadCsvData: async () => {
+    if (get().isLoading) return;
+    set({ isLoading: true, dataLoadError: null });
+    try {
+      const dataset = await loadHospitalCsvDataset();
+      set({
+        patients: dataset.patients,
+        beds: dataset.beds,
+        wards: dataset.wards,
+        labTests: dataset.labTests,
+        patientFeedback: dataset.patientFeedback,
+        physicianWorkloads: dataset.physicianWorkloads,
+        departments: dataset.departments,
+        appointments: dataset.appointments,
+        edWaitTimes: dataset.edWaitTimes,
+        dischargeRequests: dataset.dischargeRequests,
+        alerts: dataset.alerts,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown CSV data loading error.';
+      console.error('Hospital CSV data could not be loaded; retaining mock fallback data.', error);
+      set({ dataLoadError: message });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
   hospitalHealthScore: 72,
   activeTimeOffset: 'NOW',
   alerts: mockAlerts,
@@ -154,34 +195,12 @@ export const useOpsStore = create<OpsStore>((set, get) => ({
   logout: () => set({ currentUser: null, isAuthenticated: false }),
 
   dispatchAction: (alertId: string) => {
-    const state = get();
-    const alert = state.alerts.find((a) => a.id === alertId);
-
+    const alert = get().alerts.find((item) => item.id === alertId);
     if (!alert) return;
-
-    const updatedLabTests = state.labTests.map((test) => {
-      if (test.id === 'L882') {
-        return { ...test, status: 'completed' as const };
-      }
-      return test;
-    });
-
-    const updatedBeds = state.beds.map((bed) => {
-      if (bed.id === 'B12') {
-        return { ...bed, dischargeReadiness: 100, blockedByTaskId: undefined };
-      }
-      if (bed.blockedByTaskId === 'L882') {
-        return { ...bed, blockedByTaskId: undefined };
-      }
-      return bed;
-    });
-
-    const alertsWithoutResolved = state.alerts.filter((a) => a.id !== alertId);
-
+    alert.linkedLabTestIds?.forEach((testId) => get().completeLabTest(testId));
+    const state = get();
     set({
-      alerts: alertsWithoutResolved,
-      labTests: updatedLabTests,
-      beds: updatedBeds,
+      alerts: state.alerts.filter((item) => item.id !== alertId),
       hospitalHealthScore: Math.min(100, state.hospitalHealthScore + 12),
     });
   },
@@ -200,16 +219,9 @@ export const useOpsStore = create<OpsStore>((set, get) => ({
           blockedByTaskId: undefined,
         };
       }
-      if (testId === 'L882' && bed.id === 'B12') {
-        return {
-          ...bed,
-          dischargeReadiness: 100,
-          blockedByTaskId: undefined,
-        };
-      }
       return bed;
     });
-    const clearsDischargeBlocker = test.isDischargeBlocker || testId === 'L882';
+    const clearsDischargeBlocker = test.isDischargeBlocker;
 
     set({
       labTests: state.labTests.map((item) =>
@@ -226,7 +238,7 @@ export const useOpsStore = create<OpsStore>((set, get) => ({
         : patient),
       beds: updatedBeds,
       alerts: clearsDischargeBlocker
-        ? state.alerts.filter((alert) => alert.id !== 'A001')
+        ? state.alerts.filter((alert) => !alert.linkedLabTestIds?.includes(testId))
         : state.alerts,
       hospitalHealthScore: Math.min(
         100,

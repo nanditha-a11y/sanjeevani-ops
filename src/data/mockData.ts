@@ -499,6 +499,8 @@ export const mockAlerts: OperationalAlert[] = [
     blastRadiusSummary: 'ED intake queue (3 patients waiting), Ward B bed turnover, Cardiology lab backlog.',
     autoPilotSecondsLeft: 180,
     createdAt: '2026-10-10T02:55:00+05:30',
+    linkedLabTestIds: ['L882'],
+    linkedBedIds: ['B12'],
   },
   {
     id: 'A002',

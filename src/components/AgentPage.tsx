@@ -13,37 +13,42 @@ interface ChatMessage {
   id: number;
   role: 'user' | 'assistant';
   text: string;
-  action?: 'fast-track-lab' | 'release-b12';
+  action?: 'fast-track-lab' | 'release-bed';
+  actionId?: string;
 }
 
 function operationalAnswer(query: string, state: ReturnType<typeof useOpsStore.getState>) {
   const normalized = query.toLowerCase();
   if (normalized.includes('ward b') || normalized.includes('holding') || normalized.includes('lab')) {
-    const test = state.labTests.find((item) => item.id === 'L882');
-    const bed = state.beds.find((item) => item.id === 'B12');
-    if (test && test.status !== 'completed' && bed) {
+    const test = [...state.labTests]
+      .filter((item) => item.isDischargeBlocker && item.status !== 'completed')
+      .sort((first, second) => second.requestedTimeMinutesAgo - first.requestedTimeMinutesAgo)[0];
+    const bed = test ? state.beds.find((item) => item.blockedByTaskId === test.id) : undefined;
+    if (test) {
       return {
-        text: `Ward B discharge is being held by pending Lab #882 (${test.testName}) for ${test.patientName}. Bed B12 is ${bed.dischargeReadiness}% discharge-ready, so completing the blocker will clear its linked pending task.`,
+        text: `Discharge is being held by pending ${test.testName} for ${test.patientName}${bed ? ` at ${bed.ward} · ${bed.bedNumber} (${bed.dischargeReadiness}% ready)` : ''}.`,
         action: 'fast-track-lab' as const,
+        actionId: test.id,
       };
     }
-    return { text: 'Lab #882 is complete. Check the ward roster for any remaining discharge or billing clearances.' };
+    return { text: 'There are no pending discharge-blocking diagnostics. Check the ward roster for remaining discharge or billing clearances.' };
   }
   if (normalized.includes('discharge') || normalized.includes('ready')) {
     const candidates = state.beds.filter((bed) => bed.dischargeReadiness >= 80 && bed.occupancyStatus !== 'available');
     if (!candidates.length) return { text: 'There are no currently occupied beds at 80% or higher discharge readiness.' };
-    const bedReadyForRelease = candidates.find((bed) => bed.id === 'B12' && bed.patientId
+    const bedReadyForRelease = candidates.find((bed) => bed.patientId
       && state.patients.find((patient) => patient.id === bed.patientId)?.dischargeStages.find((stage) => stage.id === 'payment_cleared')?.completed);
+    const pendingBlocker = [...state.labTests]
+      .filter((test) => test.isDischargeBlocker && test.status !== 'completed')
+      .sort((first, second) => second.requestedTimeMinutesAgo - first.requestedTimeMinutesAgo)[0];
     return {
       text: candidates.map((bed) => {
         const patient = state.patients.find((item) => item.id === bed.patientId);
         return `${bed.bedNumber} · ${patient?.name ?? 'Patient record unavailable'} · ${bed.dischargeReadiness}% ready · ${bed.wardIssue}`;
       }).join('\n'),
       ...(bedReadyForRelease
-        ? { action: 'release-b12' as const }
-        : candidates.some((bed) => bed.id === 'B12') && state.labTests.some((test) => test.id === 'L882' && test.status !== 'completed')
-        ? { action: 'fast-track-lab' as const }
-        : {}),
+        ? { action: 'release-bed' as const, actionId: bedReadyForRelease.id }
+        : pendingBlocker ? { action: 'fast-track-lab' as const, actionId: pendingBlocker.id } : {}),
     };
   }
   if (normalized.includes('pressure') || normalized.includes('isolation')) {
@@ -92,8 +97,9 @@ export function AgentPage() {
   ]);
   const [input, setInput] = useState('');
   const scrollContainer = useRef<HTMLDivElement>(null);
-  const canReleaseB12 = useOpsStore((state) => Boolean(state.beds.find((bed) => bed.id === 'B12')?.patientId)
-    && Boolean(state.patients.find((patient) => patient.id === state.beds.find((bed) => bed.id === 'B12')?.patientId)?.dischargeStages.find((stage) => stage.id === 'payment_cleared')?.completed));
+  const releasableBedIds = useOpsStore((state) => state.beds.filter((bed) => bed.patientId
+    && state.patients.find((patient) => patient.id === bed.patientId)?.dischargeStages.find((stage) => stage.id === 'payment_cleared')?.completed)
+    .map((bed) => bed.id));
 
   useEffect(() => {
     scrollContainer.current?.scrollTo({ top: scrollContainer.current.scrollHeight, behavior: 'smooth' });
@@ -111,13 +117,15 @@ export function AgentPage() {
     setInput('');
   };
 
-  const executeAction = (action: ChatMessage['action']) => {
+  const executeAction = (action: ChatMessage['action'], actionId?: string) => {
     if (action === 'fast-track-lab') {
-      completeLabTest('L882');
-      setMessages((current) => [...current, { id: Date.now(), role: 'assistant', text: 'Lab #882 marked completed. Bed B12 readiness and linked discharge status have been updated.' }]);
-    } else if (action === 'release-b12') {
-      releaseBed('B12');
-      setMessages((current) => [...current, { id: Date.now(), role: 'assistant', text: 'Bed B12 release was requested. The store releases it only after payment clearance is complete.' }]);
+      if (!actionId) return;
+      const test = useOpsStore.getState().labTests.find((item) => item.id === actionId);
+      completeLabTest(actionId);
+      setMessages((current) => [...current, { id: Date.now(), role: 'assistant', text: `${test?.testName ?? 'Diagnostic test'} ${actionId} marked completed. Linked discharge tasks have been updated.` }]);
+    } else if (action === 'release-bed' && actionId) {
+      releaseBed(actionId);
+      setMessages((current) => [...current, { id: Date.now(), role: 'assistant', text: `Bed ${actionId} release was requested. The store releases it only after payment clearance is complete.` }]);
     }
   };
 
@@ -152,11 +160,11 @@ export function AgentPage() {
                 message.role === 'user' ? 'bg-teal-600 text-white' : 'border border-slate-200 bg-white text-slate-700 shadow-sm'
               }`}>
                 {message.text}
-                {message.action === 'fast-track-lab' && (
-                  <button type="button" onClick={() => executeAction(message.action)} className="mt-3 block rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-700">Fast-Track Lab #882</button>
+                {message.action === 'fast-track-lab' && message.actionId && (
+                  <button type="button" onClick={() => executeAction(message.action, message.actionId)} className="mt-3 block rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white hover:bg-rose-700">Fast-Track Lab {message.actionId}</button>
                 )}
-                {message.action === 'release-b12' && (
-                  <button type="button" disabled={!canReleaseB12} onClick={() => executeAction(message.action)} title={!canReleaseB12 ? 'Complete payment clearance before releasing the bed.' : undefined} className="mt-3 block rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300">Release Bed B12</button>
+                {message.action === 'release-bed' && message.actionId && (
+                  <button type="button" disabled={!releasableBedIds.includes(message.actionId)} onClick={() => executeAction(message.action, message.actionId)} title={!releasableBedIds.includes(message.actionId) ? 'Complete payment clearance before releasing the bed.' : undefined} className="mt-3 block rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300">Release Bed {message.actionId}</button>
                 )}
               </div>
               {message.role === 'user' && <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-700"><UserRound aria-hidden="true" className="h-5 w-5" /></span>}

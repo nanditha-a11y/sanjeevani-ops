@@ -55,32 +55,59 @@ const STAGE_NODES: StageNode[] = [
   },
 ];
 
-function isLabCritical(labTests: ReturnType<typeof useOpsStore.getState>['labTests']) {
-  return labTests.some((t) => t.id === 'L882' && t.status !== 'completed');
-}
-
-function isWardBWarning(beds: ReturnType<typeof useOpsStore.getState>['beds']) {
-  const wardBeds = beds.filter((b) => b.ward === 'Ward B');
-  const occupied = wardBeds.filter((b) => b.occupancyStatus === 'occupied' || b.occupancyStatus === 'discharge_pending').length;
-  return occupied >= wardBeds.length && wardBeds.some((b) => b.occupancyStatus === 'discharge_pending');
-}
-
 export function CausalFlow({ onNavigate }: { onNavigate: (page: AppPage, focus?: 'vacant-beds' | 'hdu' | 'lab-fast-track') => void }) {
   const [activeNode, setActiveNode] = useState<StageId | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const labTests = useOpsStore((s) => s.labTests);
   const beds = useOpsStore((s) => s.beds);
+  const edWaitTimes = useOpsStore((s) => s.edWaitTimes);
   const dispatchAction = useOpsStore((s) => s.dispatchAction);
+  const completeLabTest = useOpsStore((s) => s.completeLabTest);
 
-  const edCritical = () => false;
-  const wardBWarning = isWardBWarning(beds);
-  const labCritical = isLabCritical(labTests);
+  const pendingBlocker = [...labTests]
+    .filter((test) => test.isDischargeBlocker && test.status !== 'completed')
+    .sort((first, second) => second.requestedTimeMinutesAgo - first.requestedTimeMinutesAgo)[0];
+  const blockerBed = pendingBlocker ? beds.find((bed) => bed.blockedByTaskId === pendingBlocker.id) : undefined;
+  const pendingDischargeBeds = beds.filter((bed) => bed.occupancyStatus === 'discharge_pending').length;
+  const latestEdWait = [...edWaitTimes].sort((first, second) =>
+    `${second.date} ${second.hour}`.localeCompare(`${first.date} ${first.hour}`),
+  )[0];
+  const wardNames = [...new Set(beds.map((bed) => bed.ward))];
+  const monitoredWard = wardNames
+    .map((name) => {
+      const wardBeds = beds.filter((bed) => bed.ward === name);
+      const occupied = wardBeds.filter((bed) => bed.occupancyStatus !== 'available').length;
+      return { name, beds: wardBeds, occupancyPercent: wardBeds.length ? Math.round(occupied / wardBeds.length * 100) : 0 };
+    })
+    .find((ward) => ward.name.toLowerCase().includes('ward b'))
+    ?? wardNames.map((name) => {
+      const wardBeds = beds.filter((bed) => bed.ward === name);
+      const occupied = wardBeds.filter((bed) => bed.occupancyStatus !== 'available').length;
+      return { name, beds: wardBeds, occupancyPercent: wardBeds.length ? Math.round(occupied / wardBeds.length * 100) : 0 };
+    }).sort((first, second) => second.occupancyPercent - first.occupancyPercent)[0];
+  const wardBWarning = Boolean(monitoredWard && monitoredWard.occupancyPercent >= 80);
+  const edWaitMinutes = latestEdWait?.averageWaitMinutes ?? null;
+  const edCritical = edWaitMinutes !== null && edWaitMinutes >= 45;
+  const labCritical = Boolean(pendingBlocker);
 
   const nodes: StageNode[] = STAGE_NODES.map((n) => {
-    if (n.id === 'ed') return { ...n, status: edCritical() ? 'critical' : 'warning' as const };
-    if (n.id === 'wardB') return { ...n, status: wardBWarning ? 'warning' as const : 'normal' as const };
-    if (n.id === 'lab') return { ...n, status: labCritical ? 'critical' as const : 'normal' as const };
-    return n;
+    if (n.id === 'ed') return {
+      ...n,
+      status: edCritical ? 'critical' as const : edWaitMinutes !== null && edWaitMinutes >= 25 ? 'warning' as const : 'normal' as const,
+      subtitle: edWaitMinutes !== null ? `Average wait: ${edWaitMinutes} min` : 'Wait data unavailable',
+      waitTime: edWaitMinutes !== null ? `${edWaitMinutes} min average` : undefined,
+    };
+    if (n.id === 'wardB') return {
+      ...n,
+      status: wardBWarning ? 'warning' as const : 'normal' as const,
+      subtitle: monitoredWard ? `${monitoredWard.occupancyPercent}% Occupancy` : 'No bed data',
+    };
+    if (n.id === 'lab') return {
+      ...n,
+      status: labCritical ? 'critical' as const : 'normal' as const,
+      subtitle: pendingBlocker ? `Pending Test ${pendingBlocker.id}` : 'No blocking tests',
+    };
+    return { ...n, subtitle: `${pendingDischargeBeds} Discharge Pending` };
   });
 
   const statusColor = (status: StageNode['status']) => {
@@ -123,7 +150,11 @@ export function CausalFlow({ onNavigate }: { onNavigate: (page: AppPage, focus?:
   };
 
   const handleDispatch = () => {
-    dispatchAction('A001');
+    if (pendingBlocker) {
+      const linkedAlert = useOpsStore.getState().alerts.find((alert) => alert.linkedLabTestIds?.includes(pendingBlocker.id));
+      if (linkedAlert) dispatchAction(linkedAlert.id);
+      else completeLabTest(pendingBlocker.id);
+    }
     closeDrawer();
   };
 
@@ -149,7 +180,7 @@ export function CausalFlow({ onNavigate }: { onNavigate: (page: AppPage, focus?:
           <AlertTriangle aria-hidden="true" className="h-5 w-5 shrink-0 text-rose-700" />
           <span className="min-w-0 flex-1">
             <span className="block text-xs font-bold uppercase tracking-wide text-rose-700">Pinned · High priority bottleneck</span>
-            <span className="mt-1 block text-sm font-semibold text-rose-950">Lab Test #882 is holding Ward B discharge and Emergency Department intake.</span>
+            <span className="mt-1 block text-sm font-semibold text-rose-950">{pendingBlocker?.testName} {pendingBlocker?.id} is holding {blockerBed?.ward ?? 'ward'} discharge and Emergency Department intake.</span>
           </span>
           <span className="text-xs font-bold text-rose-800">Open fast-track →</span>
         </button>
@@ -309,10 +340,16 @@ export function CausalFlow({ onNavigate }: { onNavigate: (page: AppPage, focus?:
                     })()}
                   </div>
                   <p className="text-sm text-slate-700">
-                    {activeNode === 'lab' && 'Overdue Lab Test #882 (Cardiac Troponin I + ECG Correlation) has been pending for 90 minutes. This is the primary bottleneck in the patient flow pipeline.'}
-                    {activeNode === 'wardB' && 'Ward B is at 100% bed occupancy with 1 discharge pending. Bed B12 is at 95% discharge readiness but blocked by Lab Test #882.'}
-                    {activeNode === 'ed' && 'Emergency Department is experiencing a 45-minute surge in intake wait times due to downstream bed capacity constraints.'}
-                    {activeNode === 'discharge' && 'Discharge Hub is awaiting clearance from Ward B. Once Bed B12 is cleared, Emergency Department intake can resume normal flow.'}
+                    {activeNode === 'lab' && (pendingBlocker
+                      ? `${pendingBlocker.testName} (${pendingBlocker.id}) for ${pendingBlocker.patientName} has been pending for ${pendingBlocker.requestedTimeMinutesAgo} minutes and is linked to discharge flow.`
+                      : 'No pending diagnostic is currently marked as a discharge blocker.')}
+                    {activeNode === 'wardB' && (monitoredWard
+                      ? `${monitoredWard.name} is at ${monitoredWard.occupancyPercent}% bed occupancy with ${monitoredWard.beds.filter((bed) => bed.occupancyStatus === 'discharge_pending').length} discharges pending.`
+                      : 'No ward bed data is available.')}
+                    {activeNode === 'ed' && (latestEdWait && edWaitMinutes !== null
+                      ? `Emergency Department average wait was ${edWaitMinutes} minutes at ${latestEdWait.date} ${latestEdWait.hour}.`
+                      : 'Emergency Department wait-time data is not available.')}
+                    {activeNode === 'discharge' && `${pendingDischargeBeds} beds are marked discharge-pending in the current operational data.`}
                   </p>
                 </div>
 
@@ -338,11 +375,11 @@ export function CausalFlow({ onNavigate }: { onNavigate: (page: AppPage, focus?:
                             <span className="text-xs font-bold text-rose-700 uppercase tracking-wider">Root Cause</span>
                             <span className="text-xs text-slate-500">P0</span>
                           </div>
-                          <p className="text-sm font-medium text-slate-900">Lab Test #882</p>
-                          <p className="text-xs text-slate-500 mt-1">Cardiac Troponin I + ECG Correlation — Pending for 90 mins</p>
+                          <p className="text-sm font-medium text-slate-900">{pendingBlocker ? `${pendingBlocker.testName} · ${pendingBlocker.id}` : 'No active blocker'}</p>
+                          <p className="text-xs text-slate-500 mt-1">{pendingBlocker ? `Patient ${pendingBlocker.patientName} · ${pendingBlocker.status} · pending for ${pendingBlocker.requestedTimeMinutesAgo} mins` : 'No discharge-blocking diagnostic is currently pending.'}</p>
                           <div className="mt-2 flex items-center gap-1 text-xs text-rose-400">
                             <Clock className="w-3 h-3" />
-                            <span>90 minutes overdue</span>
+                            <span>{pendingBlocker ? `${pendingBlocker.requestedTimeMinutesAgo} minutes pending` : 'No active delay'}</span>
                           </div>
                         </div>
                       </div>
@@ -362,11 +399,11 @@ export function CausalFlow({ onNavigate }: { onNavigate: (page: AppPage, focus?:
                             <span className="text-xs font-bold text-amber-700 uppercase tracking-wider">Direct Impact</span>
                             <span className="text-xs text-slate-500">P1</span>
                           </div>
-                          <p className="text-sm font-medium text-slate-900">Holding Ward B Bed B12 clearance</p>
-                          <p className="text-xs text-slate-500 mt-1">Bed B12 (Dhruv Kapoor) at 95% discharge readiness — blocked by L882</p>
+                          <p className="text-sm font-medium text-slate-900">{blockerBed ? `Holding ${blockerBed.ward} Bed ${blockerBed.bedNumber} clearance` : 'No linked bed found'}</p>
+                          <p className="text-xs text-slate-500 mt-1">{blockerBed ? `Patient ${pendingBlocker?.patientName} at ${blockerBed.dischargeReadiness}% discharge readiness — blocked by ${pendingBlocker?.id}` : 'No bed is currently linked to the primary diagnostic blocker.'}</p>
                           <div className="mt-2 flex items-center gap-1 text-xs text-slate-500">
                             <Activity className="w-3 h-3" />
-                            <span>95% ready, 1 blocker</span>
+                            <span>{blockerBed ? `${blockerBed.dischargeReadiness}% ready, 1 blocker` : 'No linked blocker'}</span>
                           </div>
                         </div>
                       </div>
@@ -387,10 +424,10 @@ export function CausalFlow({ onNavigate }: { onNavigate: (page: AppPage, focus?:
                             <span className="text-xs text-slate-500">P2</span>
                           </div>
                           <p className="text-sm font-medium text-slate-900">Backing up Emergency Department intake</p>
-                          <p className="text-xs text-slate-500 mt-1">ED intake queue delayed by 25+ minutes due to bed capacity constraints</p>
+                          <p className="text-xs text-slate-500 mt-1">{edWaitMinutes !== null ? `ED average wait is ${edWaitMinutes} minutes; downstream bed capacity is ${monitoredWard?.occupancyPercent ?? 0}% occupied.` : 'ED wait-time measurements are not available.'}</p>
                           <div className="mt-2 flex items-center gap-1 text-xs text-rose-400">
                             <Clock className="w-3 h-3" />
-                            <span>+45 min surge active</span>
+                            <span>{edWaitMinutes !== null ? `${edWaitMinutes} min average wait` : 'No wait-time data'}</span>
                           </div>
                         </div>
                       </div>
