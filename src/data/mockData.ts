@@ -13,6 +13,7 @@ import type {
   AboutUsContent,
   PatientFeedback,
   PhysicianWorkload,
+  Department,
 } from '../types';
 
 const billingLedger = () => [
@@ -383,6 +384,44 @@ export const mockPhysicianWorkloads: PhysicianWorkload[] = [
   { doctorId: 'DOC-006', doctorName: 'Dr. S. Menon', department: 'Pediatrics', activePatientsCount: 1, blockedPatientsCount: 0, capacityStatus: 'available' },
   { doctorId: 'DOC-007', doctorName: 'Dr. Neha Patel', department: 'Observation', activePatientsCount: 1, blockedPatientsCount: 0, capacityStatus: 'available' },
   { doctorId: 'DOC-008', doctorName: 'Dr. Rohan Iyer', department: 'Cardiac Care', activePatientsCount: 0, blockedPatientsCount: 0, capacityStatus: 'available' },
+];
+
+export const mockDepartments: Department[] = [
+  {
+    id: 'DEPT-CARDIOLOGY',
+    name: 'Cardiology',
+    color: 'rose',
+    doctors: [{ id: 'DOC-CARD-1', name: 'Dr. Rohan Iyer', status: 'On Duty' }, { id: 'DOC-CARD-2', name: 'Dr. Kavita Rao', status: 'In OPD' }],
+    patients: [{ id: 'ASSIGN-P003', patientId: 'P003', patientName: 'Rohan Iyer', priority: 'high', wardName: 'Ward B', bedNumber: 'B03' }],
+  },
+  {
+    id: 'DEPT-NEUROLOGY',
+    name: 'Neurology',
+    color: 'violet',
+    doctors: [{ id: 'DOC-NEURO-1', name: 'Dr. Anita', status: 'On Duty' }],
+    patients: [{ id: 'ASSIGN-P004', patientId: 'P004', patientName: 'Meera Venkatesan', priority: 'moderate', wardName: 'Ward B', bedNumber: 'B04' }],
+  },
+  {
+    id: 'DEPT-ORTHOPEDICS',
+    name: 'Orthopedics',
+    color: 'amber',
+    doctors: [{ id: 'DOC-ORTHO-1', name: 'Dr. Vivek Iyer', status: 'In OPD' }],
+    patients: [{ id: 'ASSIGN-P002', patientId: 'P002', patientName: 'Priya Nair', priority: 'moderate', wardName: 'Ward B', bedNumber: 'B02' }],
+  },
+  {
+    id: 'DEPT-DERMATOLOGY',
+    name: 'Dermatology',
+    color: 'teal',
+    doctors: [{ id: 'DOC-DERM-1', name: 'Dr. Neha Patel', status: 'On Call' }],
+    patients: [{ id: 'ASSIGN-P008', patientId: 'P008', patientName: 'Ishani Patil', priority: 'low', wardName: 'Ward B', bedNumber: 'B06' }],
+  },
+  {
+    id: 'DEPT-GYNECOLOGY',
+    name: 'Gynecology',
+    color: 'pink',
+    doctors: [{ id: 'DOC-GYN-1', name: 'Dr. Farah Khan', status: 'On Duty' }],
+    patients: [{ id: 'ASSIGN-P006', patientId: 'P006', patientName: 'Ananya Desai', priority: 'low', wardName: 'Ward B', bedNumber: 'B07' }],
+  },
 ];
 
 export const mockAboutUsContent: AboutUsContent = {

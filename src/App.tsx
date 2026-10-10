@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ComponentType } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AboutPage } from './components/AboutPage';
@@ -14,9 +14,10 @@ import { TrashPage } from './components/TrashPage';
 import { PatientRecordModal } from './components/PatientRecordModal';
 import { AgentPage } from './components/AgentPage';
 import { AuthPage } from './components/AuthPage';
+import { DepartmentsPage } from './components/DepartmentsPage';
 import { useOpsStore } from './store/useOpsStore';
 
-const pageContent: Record<Exclude<AppPage, 'about' | 'executive' | 'wards' | 'agent'>, ComponentType> = {
+const pageContent: Record<Exclude<AppPage, 'about' | 'executive' | 'wards' | 'agent' | 'departments'>, ComponentType> = {
   isolation: IsolationPage,
   campaigns: CampaignsPage,
   discharge: DischargePage,
@@ -25,28 +26,53 @@ const pageContent: Record<Exclude<AppPage, 'about' | 'executive' | 'wards' | 'ag
 };
 
 export function App() {
-  const [currentPage, setCurrentPage] = useState<AppPage>('executive');
+  const [currentPage, setCurrentPage] = useState<AppPage>(() => window.location.pathname === '/departments' ? 'departments' : 'executive');
   const [routeFocus, setRouteFocus] = useState<'vacant-beds' | 'hdu' | 'lab-fast-track' | undefined>();
+  const [wardTarget, setWardTarget] = useState<{ wardName: string; patientId: string } | undefined>();
   const currentUser = useOpsStore((state) => state.currentUser);
   const isAuthenticated = useOpsStore((state) => state.isAuthenticated);
   const logout = useOpsStore((state) => state.logout);
+  const openPatientRecord = useOpsStore((state) => state.openPatientRecord);
+
+  const navigate = (page: AppPage, focus?: 'vacant-beds' | 'hdu' | 'lab-fast-track') => {
+    setCurrentPage(page);
+    setRouteFocus(focus);
+    setWardTarget(undefined);
+    const nextPath = page === 'departments' ? '/departments' : '/';
+    if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
+  };
+  const navigateToPatientWard = (patientId: string, wardName: string) => {
+    setCurrentPage('wards');
+    setRouteFocus(undefined);
+    setWardTarget({ patientId, wardName });
+    openPatientRecord(patientId);
+    if (window.location.pathname !== '/') window.history.pushState({}, '', '/');
+  };
+
+  useEffect(() => {
+    const onPopState = () => {
+      setCurrentPage(window.location.pathname === '/departments' ? 'departments' : 'executive');
+      setRouteFocus(undefined);
+      setWardTarget(undefined);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   if (!isAuthenticated || !currentUser) {
     return <AuthPage />;
   }
 
-  const navigate = (page: AppPage, focus?: 'vacant-beds' | 'hdu' | 'lab-fast-track') => {
-    setCurrentPage(page);
-    setRouteFocus(focus);
-  };
   const page = currentPage === 'about'
     ? <AboutPage />
     : currentPage === 'executive'
       ? <CommandCenter onNavigate={navigate} />
     : currentPage === 'agent'
       ? <AgentPage />
+      : currentPage === 'departments'
+        ? <DepartmentsPage onOpenWardFile={navigateToPatientWard} />
     : currentPage === 'wards'
-        ? <WardsPage focus={routeFocus === 'vacant-beds' || routeFocus === 'hdu' ? routeFocus : undefined} />
+        ? <WardsPage focus={routeFocus === 'vacant-beds' || routeFocus === 'hdu' ? routeFocus : undefined} wardTarget={wardTarget} />
         : currentPage === 'insurance'
           ? <InsurancePage focus={routeFocus === 'lab-fast-track' ? routeFocus : undefined} />
         : (() => {

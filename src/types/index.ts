@@ -98,6 +98,32 @@ export interface PhysicianWorkload {
   capacityStatus: 'overloaded' | 'balanced' | 'available';
 }
 
+export type DepartmentDoctorStatus = 'On Duty' | 'In OPD' | 'On Call';
+export type DepartmentTriagePriority = 'high' | 'moderate' | 'low';
+
+export interface DepartmentDoctor {
+  id: string;
+  name: string;
+  status: DepartmentDoctorStatus;
+}
+
+export interface DepartmentPatientAssignment {
+  id: string;
+  patientId: string;
+  patientName: string;
+  priority: DepartmentTriagePriority;
+  wardName: string;
+  bedNumber: string;
+}
+
+export interface Department {
+  id: string;
+  name: string;
+  color: string;
+  doctors: DepartmentDoctor[];
+  patients: DepartmentPatientAssignment[];
+}
+
 export interface DischargeStage {
   id: 'doctor_signoff' | 'pharmacy_check' | 'insurance_preapproval' | 'payment_cleared' | 'going_home';
   label: string;

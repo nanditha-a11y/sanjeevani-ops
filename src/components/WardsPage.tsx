@@ -30,7 +30,7 @@ const statusFor = (occupancy: number, threshold: number) => occupancy > threshol
     ? { text: 'Moderate Load', style: 'border-amber-200 bg-amber-50 text-amber-800' }
     : { text: 'Normal Capacity', style: 'border-emerald-200 bg-emerald-50 text-emerald-800' };
 
-export function WardsPage({ focus }: { focus?: 'vacant-beds' | 'hdu' }) {
+export function WardsPage({ focus, wardTarget }: { focus?: 'vacant-beds' | 'hdu'; wardTarget?: { wardName: string; patientId: string } }) {
   const wards = useOpsStore((state) => state.wards);
   const beds = useOpsStore((state) => state.beds);
   const patients = useOpsStore((state) => state.patients);
@@ -68,12 +68,14 @@ export function WardsPage({ focus }: { focus?: 'vacant-beds' | 'hdu' }) {
   });
 
   useEffect(() => {
-    if (focus === 'hdu') {
+    if (wardTarget) {
+      setSelectedWardId(wards.find((ward) => ward.name.toLowerCase() === wardTarget.wardName.toLowerCase())?.id ?? null);
+    } else if (focus === 'hdu') {
       setSelectedWardId(wards.find((ward) => ward.name.toLowerCase().includes('step-down'))?.id ?? null);
     } else if (showVacantBeds) {
       window.setTimeout(() => document.getElementById('vacant-beds-view')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     }
-  }, [focus, wards]);
+  }, [focus, wards, wardTarget]);
 
   const saveWard = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

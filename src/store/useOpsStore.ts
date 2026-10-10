@@ -16,6 +16,7 @@ import type {
   AuthUser,
   PatientFeedback,
   PhysicianWorkload,
+  Department,
 } from '../types';
 import {
   mockBloodInventory,
@@ -31,6 +32,7 @@ import {
   mockAboutUsContent,
   mockPatientFeedback,
   mockPhysicianWorkloads,
+  mockDepartments,
 } from '../data/mockData';
 
 type TimeOffset = 'NOW' | '+1h' | '+2h' | '+4h';
@@ -56,6 +58,7 @@ interface OpsStore {
   selectedPatientRecordId: string | null;
   patientFeedback: PatientFeedback[];
   physicianWorkloads: PhysicianWorkload[];
+  departments: Department[];
   updateAboutUsContent: (updates: Partial<AboutUsContent>) => void;
   resetAboutUsSection: (section: keyof AboutUsContent) => void;
   clearAboutUsSection: (section: keyof AboutUsContent) => void;
@@ -103,6 +106,9 @@ interface OpsStore {
   addPatientFeedback: (feedback: Omit<PatientFeedback, 'id' | 'timestamp' | 'status'>) => void;
   updatePatientFeedbackStatus: (feedbackId: string, status: PatientFeedback['status']) => void;
   reassignPatientDoctor: (patientId: string, doctorName: string) => void;
+  saveDepartment: (department: Department) => void;
+  deleteDepartment: (departmentId: string) => void;
+  removeDepartmentPatient: (departmentId: string, assignmentId: string) => void;
 }
 
 export const useOpsStore = create<OpsStore>((set, get) => ({
@@ -126,6 +132,7 @@ export const useOpsStore = create<OpsStore>((set, get) => ({
   selectedPatientRecordId: null,
   patientFeedback: mockPatientFeedback,
   physicianWorkloads: mockPhysicianWorkloads,
+  departments: mockDepartments,
   updateAboutUsContent: (updates) => set((state) => state.currentUser?.role === 'hospital_admin'
     ? { aboutUsContent: { ...state.aboutUsContent, ...updates } }
     : state),
@@ -875,6 +882,133 @@ export const useOpsStore = create<OpsStore>((set, get) => ({
       }),
     });
   },
+
+  saveDepartment: (department) => {
+    const state = get();
+    const normalizedName = department.name.trim();
+    if (!normalizedName
+      || state.departments.some((item) => item.id !== department.id && item.name.toLowerCase() === normalizedName.toLowerCase())
+      || department.patients.some((assignment) => !assignment.patientId.trim() || !assignment.patientName.trim() || !assignment.wardName.trim() || !assignment.bedNumber.trim())
+      || new Set(department.patients.map((assignment) => assignment.patientId.trim().toLowerCase())).size !== department.patients.length
+      || department.patients.some((assignment) => state.beds.some((bed) =>
+        bed.ward.toLowerCase() === assignment.wardName.trim().toLowerCase()
+        && bed.bedNumber.toLowerCase() === assignment.bedNumber.trim().toLowerCase()
+        && bed.patientId !== assignment.patientId.trim(),
+      ))) return;
+
+    let wards = [...state.wards];
+    let patients = [...state.patients];
+    let beds = [...state.beds];
+    let physicianWorkloads = [...state.physicianWorkloads];
+    const departmentDoctor = department.doctors[0]?.name || 'Unassigned';
+
+    for (const assignment of department.patients) {
+      const patientId = assignment.patientId.trim();
+      const patientName = assignment.patientName.trim();
+      const wardName = assignment.wardName.trim();
+      const bedNumber = assignment.bedNumber.trim();
+      if (!patientId || !patientName || !wardName || !bedNumber) continue;
+
+      if (!wards.some((ward) => ward.name.toLowerCase() === wardName.toLowerCase())) {
+        wards.push({
+          id: `WARD-${Date.now()}-${wards.length}`,
+          name: wardName,
+          floor: 1,
+          totalRooms: 20,
+          emergencyCapacityThreshold: 85,
+        });
+      }
+
+      const currentPatient = patients.find((patient) => patient.id === patientId);
+      if (currentPatient) {
+        patients = patients.map((patient) => patient.id === patientId
+          ? { ...patient, name: patientName, department: normalizedName }
+          : patient);
+      } else {
+        patients.push({
+          id: patientId,
+          name: patientName,
+          age: 0,
+          department: normalizedName,
+          visitType: normalizedName,
+          status: 'admitted',
+          waitingTimeMinutes: 0,
+          itemizedBill: [],
+          billingStatus: 'pending_clearance',
+          dischargeStages: [
+            { id: 'doctor_signoff', label: 'Doctor Signoff', completed: false },
+            { id: 'pharmacy_check', label: 'Pharmacy Check', completed: false },
+            { id: 'insurance_preapproval', label: 'Insurance Pre-Approval', completed: false },
+            { id: 'payment_cleared', label: 'Payment Cleared', completed: false },
+            { id: 'going_home', label: 'Going Home', completed: false },
+          ],
+          dischargeType: 'regular',
+          billType: 'provisional',
+          dischargeNote: '',
+        });
+      }
+
+      const currentBed = beds.find((bed) => bed.patientId === patientId);
+      const ward = wards.find((item) => item.name.toLowerCase() === wardName.toLowerCase());
+      if (currentBed) {
+        beds = beds.map((bed) => bed.patientId === patientId
+          ? { ...bed, ward: wardName, bedNumber, attendingPhysician: departmentDoctor }
+          : bed);
+      } else if (!beds.some((bed) => bed.ward.toLowerCase() === wardName.toLowerCase() && bed.bedNumber.toLowerCase() === bedNumber.toLowerCase())) {
+        beds.push({
+          id: `${ward?.id ?? 'WARD'}-${bedNumber}`,
+          ward: wardName,
+          bedNumber,
+          occupancyStatus: 'occupied',
+          dischargeReadiness: 0,
+          patientId,
+          itemizedBill: [],
+          billingStatus: 'pending_clearance',
+          wardType: 'general',
+          attendingPhysician: departmentDoctor,
+          wardIssue: normalizedName,
+        });
+      }
+
+      if (departmentDoctor !== 'Unassigned' && !physicianWorkloads.some((doctor) => doctor.doctorName === departmentDoctor)) {
+        physicianWorkloads.push({
+          doctorId: `DOC-${Date.now()}-${physicianWorkloads.length}`,
+          doctorName: departmentDoctor,
+          department: normalizedName,
+          activePatientsCount: 0,
+          blockedPatientsCount: 0,
+          capacityStatus: 'available',
+        });
+      }
+    }
+
+    const departments = state.departments.some((item) => item.id === department.id)
+      ? state.departments.map((item) => item.id === department.id ? { ...department, name: normalizedName } : item)
+      : [...state.departments, { ...department, name: normalizedName }];
+
+    physicianWorkloads = physicianWorkloads.map((doctor) => {
+      const assigned = beds.filter((bed) => bed.attendingPhysician === doctor.doctorName && bed.occupancyStatus !== 'available');
+      const activePatientsCount = assigned.length;
+      const blockedPatientsCount = assigned.filter((bed) => Boolean(bed.blockedByTaskId) || bed.dischargeReadiness >= 80).length;
+      return {
+        ...doctor,
+        activePatientsCount,
+        blockedPatientsCount,
+        capacityStatus: activePatientsCount >= 4 ? 'overloaded' : activePatientsCount === 0 ? 'available' : 'balanced',
+      };
+    });
+    set({ departments, wards, patients, beds, physicianWorkloads });
+  },
+
+  deleteDepartment: (departmentId) => set((state) => ({
+    departments: state.departments.filter((department) => department.id !== departmentId),
+  })),
+
+  removeDepartmentPatient: (departmentId, assignmentId) => set((state) => ({
+    departments: state.departments.map((department) => department.id === departmentId
+      ? { ...department, patients: department.patients.filter((assignment) => assignment.id !== assignmentId) }
+      : department),
+  })),
 
   setTimeOffset: (offset: TimeOffset) => {
     set({ activeTimeOffset: offset });

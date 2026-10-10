@@ -1,7 +1,7 @@
-import { Bot, HeartPulse, LogOut, UserRound } from 'lucide-react';
+import { Bot, Building2, HeartPulse, LogOut, UserRound } from 'lucide-react';
 import type { AuthUser } from '../types';
 
-export type AppPage = 'executive' | 'isolation' | 'wards' | 'campaigns' | 'discharge' | 'insurance' | 'trash' | 'about' | 'agent';
+export type AppPage = 'executive' | 'isolation' | 'wards' | 'campaigns' | 'discharge' | 'insurance' | 'trash' | 'about' | 'agent' | 'departments';
 
 export const appPages: Array<{ id: AppPage; label: string; icon?: typeof Bot }> = [
   { id: 'executive', label: '1. Executive AI' },
@@ -12,6 +12,7 @@ export const appPages: Array<{ id: AppPage; label: string; icon?: typeof Bot }> 
   { id: 'insurance', label: '6. Insurance & TPA' },
   { id: 'trash', label: '7. Trash / Archives' },
   { id: 'agent', label: '8. AI Agent Chat', icon: Bot },
+  { id: 'departments', label: 'Departments', icon: Building2 },
 ];
 
 interface NavigationProps {
