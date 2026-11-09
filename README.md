@@ -27,6 +27,32 @@ Traditional hospital information systems mainly store information, but they may 
 
 Sanjeevani Ops provides a centralized command center that monitors hospital operations, identifies bottlenecks, visualizes their effects, and helps administrators take corrective action.
 
+## 🖥️ Application Preview
+
+### 1. Login page
+![Command Center](screenshots/login.png)
+
+### 2. Executive ai
+![Command Center](screenshots/executive_ai.png)
+
+### 3. Navigation for that page
+![Causal Analysis](screenshots/navigation.png)
+
+### 4. Isolation Wards
+![Action Center](screenshots/isolation_wards.png)
+
+### 5. Ward & Bed Management
+![Bed Management](screenshots/comman_wards.png)
+
+### 5. Patient Details
+![Discharge Management](screenshots/record.png)
+
+### 6. Blood Drive
+![Insurance Management](screenshots/blood_drives.png)
+
+### 7. Departments
+![Insurance Management](screenshots/departments.png)
+
 ### Key Features
 
 - **AI-Powered Command Center:** Provides an executive overview of hospital operations and important alerts.
@@ -97,6 +123,7 @@ src/
 - `store/useOpsStore.ts` — Manages shared application state and clinical actions.
 - `data/mockData.ts` — Contains demonstration data for patients, beds, laboratories, and insurance claims.
 - `types/index.ts` — Defines TypeScript interfaces for clinical data models.
+
 
 ## 🚀 Getting Started
 
