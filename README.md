@@ -93,7 +93,7 @@ Sanjeevani Ops identifies the root cause, displays the chain of effects, and hel
 | PostCSS | CSS processing |
 | Framer Motion | UI animations and transitions |
 | Lucide React | Icons |
-| Vercel | Deployment configuration |
+| Render | Deployment configuration |
 
 ## 📂 Project Structure
 
